@@ -33,6 +33,11 @@ const currentKey = computed(() => {
 })
 const alreadySent = computed(() => !!currentKey.value && currentKey.value === sentKey.value)
 
+// Kartu hasil hanya tampil selama isian form masih sama dengan yang menghasilkannya.
+// Berkas atau data transaksi diubah: kartu lama langsung hilang (tetap ada di Riwayat).
+const resultKey = ref('')
+const showResults = computed(() => results.value.length > 0 && resultKey.value === currentKey.value)
+
 // toolbar dan panel thumbnail disembunyikan, halaman dipas selebar bingkai
 const previewUrl = computed(() => (previewBase.value ? `${previewBase.value}#toolbar=0&navpanes=0&view=FitH` : ''))
 
@@ -81,13 +86,15 @@ async function submit() {
 
   loading.value = true
   elapsed.value = 0
+  results.value = []   // sembunyikan hasil sebelumnya selama pemeriksaan baru berjalan
   timer = setInterval(() => elapsed.value++, 1000)
   try {
     const res = await api('/documents', { method: 'POST', body })
     const created = res.data ?? res
     sentKey.value = key   // unggahan diterima server: kunci tombol
     const doc = await poll(created.id)
-    results.value.unshift(doc)
+    results.value = [doc]   // hanya hasil terbaru; hasil lama tetap ada di Riwayat
+    resultKey.value = key
     if (doc.status === 'failed' || doc.error) {
       sentKey.value = ''   // gagal dibaca: boleh coba lagi
       notice.value = {
@@ -191,11 +198,11 @@ async function submit() {
       <div v-if="error" class="error" role="alert">{{ error }}</div>
     </form>
 
-    <div v-if="results.length" class="rhead">
-      <h2 style="margin: 0; font-size: 18px">Hasil sesi ini ({{ results.length }})</h2>
+    <div v-if="showResults" class="rhead">
+      <h2 style="margin: 0; font-size: 18px">Hasil pemeriksaan terbaru</h2>
       <NuxtLink to="/riwayat" style="font-weight: 600">Lihat semua riwayat →</NuxtLink>
     </div>
-    <ResultCard v-for="(d, i) in results" :id="i === 0 ? 'hasil-terbaru' : undefined" :key="d.id" :doc="d" :open="i === 0" />
+    <ResultCard v-for="(d, i) in (showResults ? results : [])" :id="i === 0 ? 'hasil-terbaru' : undefined" :key="d.id" :doc="d" :open="i === 0" />
   </main>
 </template>
 
